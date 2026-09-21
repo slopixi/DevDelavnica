@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>YOLO Detection Demo</title>
+<style>
+  body { font-family: sans-serif; background: #111; color: #eee; text-align: center; }
+  #stage { position: relative; display: inline-block; margin-top: 1rem; }
+  video, canvas#overlay { position: absolute; top: 0; left: 0; }
+  #status { margin-top: 0.5rem; font-size: 0.9rem; color: #9c9; }
+</style>
+</head>
+<body>
+  <h1>YOLO Detection Demo</h1>
+  <div id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+  <div id="status">starting camera...</div>
+
+  <script>
+    // --- Config constants ---------------------------------------------
+    const CAPTURE_INTERVAL_MS = 400;
+    const JPEG_QUALITY = 0.6;
+    const DETECT_URL = "/detect";
+
+    const video = document.getElementById("video");
+    const overlay = document.getElementById("overlay");
+    const overlayCtx = overlay.getContext("2d");
+    const statusEl = document.getElementById("status");
+
+    // Hidden canvas used only for capturing frames to send to the server.
+    const captureCanvas = document.createElement("canvas");
+    const captureCtx = captureCanvas.getContext("2d");
+
+    let requestInFlight = false;
+
+    async function init() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        await new Promise((resolve) => (video.onloadedmetadata = resolve));
+        video.play();
+
+        video.width = video.videoWidth;
+        video.height = video.videoHeight;
+        overlay.width = video.videoWidth;
+        overlay.height = video.videoHeight;
+        captureCanvas.width = video.videoWidth;
+        captureCanvas.height = video.videoHeight;
+
+        statusEl.textContent = "running";
+        setInterval(tick, CAPTURE_INTERVAL_MS);
+      } catch (err) {
+        statusEl.textContent = "camera error: " + err.message;
+      }
+    }
+
+    function tick() {
+      if (requestInFlight) {
+        // Skip this tick rather than queueing overlapping requests.
+        return;
+      }
+      captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+      captureCanvas.toBlob(
+        (blob) => {
+          if (blob) sendFrame(blob);
+        },
+        "image/jpeg",
+        JPEG_QUALITY
+      );
+    }
+
+    async function sendFrame(blob) {
+      requestInFlight = true;
+      const formData = new FormData();
+      formData.append("image", blob, "frame.jpg");
+
+      try {
+        const resp = await fetch(DETECT_URL, { method: "POST", body: formData });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          statusEl.textContent = "detect error: " + (err.error || resp.status);
+          return;
+        }
+        const data = await resp.json();
+        drawDetections(data.detections || []);
+        statusEl.textContent = `ok - ${data.detections.length} detections - ${data.inference_ms} ms`;
+      } catch (err) {
+        statusEl.textContent = "request failed: " + err.message;
+      } finally {
+        requestInFlight = false;
+      }
+    }
+
+    function drawDetections(detections) {
+      overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+      overlayCtx.lineWidth = 2;
+      overlayCtx.strokeStyle = "#00ff66";
+      overlayCtx.font = "16px sans-serif";
+      overlayCtx.fillStyle = "#00ff66";
+
+      for (const det of detections) {
+        const [x1, y1, x2, y2] = det.box;
+        overlayCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        const label = `${det.class_name} (${Math.round(det.confidence * 100)}%)`;
+        const textY = y1 > 16 ? y1 - 4 : y1 + 16;
+        overlayCtx.fillText(label, x1, textY);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

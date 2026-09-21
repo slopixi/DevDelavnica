@@ -6,7 +6,7 @@ CPU-only, no-training, real-time-feeling object detection demo, wrapped in a sim
 
 A small FastAPI backend runs Ultralytics YOLO26 (CPU-only) behind one HTTP endpoint. A single static HTML/JS page captures webcam frames in the browser and draws the returned bounding boxes on a canvas overlay. No GPU, no training step, no cloud inference API.
 
-> **Status:** this repo currently contains only the project spec (`CLAUDE.md`). The `server.py` / `static/index.html` scaffold described below has not been implemented yet — the instructions are the plan for the initial scaffold commit.
+> **Status:** the initial scaffold (`server.py`, `static/index.html`, `requirements.txt`, `.gitignore`) is implemented and has passed the smoke test described below on the dev machine (WSL2/Linux, CPU-only). The manual webcam test still needs to be done by a human with a camera attached.
 
 ## Requirements
 
@@ -61,7 +61,14 @@ Detects standard COCO classes (person, car, dog, etc.) from a live webcam feed a
 
 ## Performance
 
-Inference time is measured server-side around the `model.predict(...)` call (`inference_ms` in the `/detect` response), not the HTTP round trip. Once the scaffold is implemented and run on the target dev machine, the observed average `inference_ms` / FPS over at least 10 frames should be recorded here.
+Inference time is measured server-side around the `model.predict(...)` call (`inference_ms` in the `/detect` response), not the HTTP round trip.
+
+Observed on the dev machine (WSL2/Linux, 12th Gen Intel Core i7-1255U, CPU-only, OpenVINO export, `imgsz=480`), 10 requests against `ultralytics`'s sample `bus.jpg` test image:
+
+- First request: ~1723 ms (includes one-time OpenVINO graph/model warm-up on first inference).
+- Remaining 9 requests: 31.3–49.8 ms, average ≈ 36.6 ms (≈ 27 FPS steady state).
+
+So expect a one-time warm-up delay right after `GET /health` first reports `model_loaded: true`, then a "few FPS" feel matching the design target for the rest of the session.
 
 ## Known limitations
 

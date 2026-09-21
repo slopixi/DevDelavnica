@@ -1,0 +1,20 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Exported / downloaded model artifacts — never commit weights
+models/
+*.pt
+*.onnx
+*.xml
+*.bin
+
+# Local test images used for the smoke test
+test.jpg
+
+# Editor / OS cruft
+.vscode/
+.idea/
+.DS_Store
