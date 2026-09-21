@@ -26,14 +26,25 @@ source .venv/bin/activate
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. One-time model export (produces models/yolo26n_openvino_model/, gitignored)
+# 3. One-time model export
+# `yolo` becomes available on PATH automatically once step 2 (pip install)
+# has finished inside the activated venv — no separate install/PATH step needed.
+# `yolo export` always writes its output into the current directory, so it
+# does NOT create models/yolo26n_openvino_model/ by itself; move it there:
 yolo export model=yolo26n.pt format=openvino imgsz=480
+mkdir -p models
+mv yolo26n_openvino_model models/
+rm -f yolo26n.pt   # raw weights are no longer needed once the export exists
 # If OpenVINO export/runtime isn't available on your machine, fall back to:
 #   yolo export model=yolo26n.pt format=onnx imgsz=480
+#   mkdir -p models && mv yolo26n_onnx_model models/
 # and update MODEL_PATH in server.py accordingly.
 
 # 4. Start the backend
 uvicorn server:app --reload
+# To make the demo reachable from another device on the same LAN (e.g. a
+# phone browser), bind to 0.0.0.0 instead — still no auth/TLS, LAN-only:
+#   uvicorn server:app --host 0.0.0.0 --port 8000
 
 # 5. Open the frontend
 # Open static/index.html in a browser (or serve it via FastAPI's StaticFiles mount)
